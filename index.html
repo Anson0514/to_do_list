@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Todo List</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f4f7fb;
+      color: #333;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 24px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.08);
+    }
+    h1 {
+      margin: 0 0 16px;
+      font-size: 2rem;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    label {
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: block;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ccd6e0;
+      border-radius: 8px;
+      font-size: 1rem;
+      box-sizing: border-box;
+      background: #fafbff;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .button-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    button {
+      border: none;
+      color: #fff;
+      background: #2563eb;
+      padding: 12px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background .15s ease;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    button.secondary {
+      background: #6b7280;
+    }
+    .status {
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      display: none;
+    }
+    .status.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+    }
+    th, td {
+      padding: 14px 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    th {
+      background: #eef2ff;
+      font-weight: 700;
+    }
+    .actions button {
+      background: #10b981;
+    }
+    .actions button.delete {
+      background: #ef4444;
+    }
+    .actions button.secondary {
+      background: #6b7280;
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Todo List</h1>
+    <div class="status" id="status"></div>
+
+    <div class="form-row">
+      <div>
+        <label for="name">標題</label>
+        <input id="name" type="text" placeholder="輸入待辦事項標題" />
+      </div>
+      <div>
+        <label for="contents">內容</label>
+        <textarea id="contents" placeholder="輸入待辦事項內容"></textarea>
+      </div>
+    </div>
+
+    <div class="button-row">
+      <button id="saveButton">新增任務</button>
+      <button id="cancelEditButton" class="secondary" style="display:none;">取消編輯</button>
+    </div>
+
+    <div class="footer">
+      <div>目前任務數量：<strong id="itemCount">0</strong></div>
+      <button id="refreshButton" class="secondary">重新整理</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>標題</th>
+          <th>內容</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="itemsTable"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const baseUrl = window.location.origin;
+    const nameInput = document.getElementById('name');
+    const contentsInput = document.getElementById('contents');
+    const itemsTable = document.getElementById('itemsTable');
+    const itemCount = document.getElementById('itemCount');
+    const statusBox = document.getElementById('status');
+    const saveButton = document.getElementById('saveButton');
+    const cancelEditButton = document.getElementById('cancelEditButton');
+    const refreshButton = document.getElementById('refreshButton');
+
+    let editItemId = null;
+
+    function showStatus(message, type = 'success') {
+      statusBox.textContent = message;
+      statusBox.className = `status ${type}`;
+      statusBox.style.display = 'block';
+      setTimeout(() => {
+        statusBox.style.display = 'none';
+      }, 3500);
+    }
+
+    function clearForm() {
+      nameInput.value = '';
+      contentsInput.value = '';
+      editItemId = null;
+      saveButton.textContent = '新增任務';
+      cancelEditButton.style.display = 'none';
+    }
+
+    async function fetchItems() {
+      try {
+        const response = await fetch(`${baseUrl}/items`);
+        const items = await response.json();
+        renderItems(items);
+        await fetchCount();
+      } catch (error) {
+        showStatus('無法取得任務清單，請檢查後端是否啟動。', 'error');
+      }
+    }
+
+    async function fetchCount() {
+      try {
+        const response = await fetch(`${baseUrl}/items/item_amount`);
+        const result = await response.json();
+        itemCount.textContent = result.message;
+      } catch (error) {
+        itemCount.textContent = '0';
+      }
+    }
+
+    function renderItems(items) {
+      itemsTable.innerHTML = '';
+      if (!items.length) {
+        itemsTable.innerHTML = '<tr><td colspan="4">目前尚無任務</td></tr>';
+        return;
+      }
+      items.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${item.id}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.contents)}</td>
+          <td class="actions">
+            <button type="button" onclick="editItem(${item.id})">編輯</button>
+            <button type="button" class="delete" onclick="deleteItem(${item.id})">刪除</button>
+          </td>
+        `;
+        itemsTable.appendChild(row);
+      });
+    }
+
+    function escapeHtml(text) {
+      const element = document.createElement('div');
+      element.textContent = text;
+      return element.innerHTML;
+    }
+
+    async function saveItem() {
+      const name = nameInput.value.trim();
+      const contents = contentsInput.value.trim();
+      if (!name || !contents) {
+        showStatus('標題和內容皆為必填。', 'error');
+        return;
+      }
+
+      const payload = { name, contents };
+      try {
+        if (editItemId) {
+          const response = await fetch(`${baseUrl}/items/${editItemId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) throw new Error('更新失敗');
+          showStatus('任務已更新');
+        } else {
+          const response = await fetch(`${baseUrl}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) throw new Error('新增失敗');
+          showStatus('任務已新增');
+        }
+        clearForm();
+        fetchItems();
+      } catch (error) {
+        showStatus('儲存失敗，請稍後重試。', 'error');
+      }
+    }
+
+    async function editItem(id) {
+      try {
+        const response = await fetch(`${baseUrl}/items/${id}`);
+        if (!response.ok) throw new Error('讀取失敗');
+        const item = await response.json();
+        editItemId = item.id;
+        nameInput.value = item.name;
+        contentsInput.value = item.contents;
+        saveButton.textContent = '更新任務';
+        cancelEditButton.style.display = 'inline-flex';
+      } catch (error) {
+        showStatus('無法讀取該任務。', 'error');
+      }
+    }
+
+    async function deleteItem(id) {
+      if (!confirm('確定要刪除這個任務嗎？')) return;
+      try {
+        const response = await fetch(`${baseUrl}/items/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('刪除失敗');
+        showStatus('任務已刪除');
+        fetchItems();
+      } catch (error) {
+        showStatus('刪除失敗，請稍後重試。', 'error');
+      }
+    }
+
+    saveButton.addEventListener('click', saveItem);
+    cancelEditButton.addEventListener('click', () => {
+      clearForm();
+    });
+    refreshButton.addEventListener('click', fetchItems);
+
+    fetchItems();
+  </script>
+</body>
+</html>
