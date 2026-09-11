@@ -83,6 +83,14 @@ def get_items_by_name(name: str):
             result.append(i)
     return result
 
+@app.get("/items/by_contents", response_model = list[Item])
+def get_items_by_contents(contents: str):
+    result = []
+    for i in items_db.values():
+        if contents in i.contents:
+            result.append(i)
+    return result
+
 @app.get("/items/status", response_model=list[Item])
 def get_items_by_status(status: bool):
     return [item for item in items_db.values() if item.status == status]
