@@ -54,6 +54,14 @@
       flex-wrap: wrap;
       margin-bottom: 24px;
     }
+    .search-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .search-row input {
+      flex: 1;
+    }
     button {
       border: none;
       color: #fff;
@@ -137,6 +145,12 @@
       <button id="cancelEditButton" class="secondary" style="display:none;">取消編輯</button>
     </div>
 
+    <div class="search-row">
+      <input id="searchInput" type="search" placeholder="依標題搜尋任務" />
+      <button id="searchButton">搜尋</button>
+      <button id="clearSearchButton" class="secondary">清除</button>
+    </div>
+
     <div class="footer">
       <div>目前任務數量：<strong id="itemCount">0</strong></div>
       <button id="refreshButton" class="secondary">重新整理</button>
@@ -165,6 +179,9 @@
     const saveButton = document.getElementById('saveButton');
     const cancelEditButton = document.getElementById('cancelEditButton');
     const refreshButton = document.getElementById('refreshButton');
+    const searchInput = document.getElementById('searchInput');
+    const searchButton = document.getElementById('searchButton');
+    const clearSearchButton = document.getElementById('clearSearchButton');
 
     let editItemId = null;
 
@@ -187,8 +204,14 @@
 
     async function fetchItems() {
       try {
-        const response = await fetch(`${baseUrl}/items`);
-        const items = await response.json();
+        const searchTerm = searchInput.value.trim();
+        const endpoint = searchTerm
+          ? `${baseUrl}/items/by_name?name=${encodeURIComponent(searchTerm)}`
+          : `${baseUrl}/items`;
+        const response = await fetch(endpoint);
+        if (!response.ok) throw new Error('讀取失敗');
+        const result = await response.json();
+        const items = Array.isArray(result) ? result : [];
         renderItems(items);
         await fetchCount();
       } catch (error) {
@@ -209,7 +232,8 @@
     function renderItems(items) {
       itemsTable.innerHTML = '';
       if (!items.length) {
-        itemsTable.innerHTML = '<tr><td colspan="4">目前尚無任務</td></tr>';
+        const message = searchInput.value.trim() ? '找不到符合的任務' : '目前尚無任務';
+        itemsTable.innerHTML = `<tr><td colspan="4">${message}</td></tr>`;
         return;
       }
       items.forEach(item => {
@@ -299,6 +323,14 @@
       clearForm();
     });
     refreshButton.addEventListener('click', fetchItems);
+    searchButton.addEventListener('click', fetchItems);
+    clearSearchButton.addEventListener('click', () => {
+      searchInput.value = '';
+      fetchItems();
+    });
+    searchInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') fetchItems();
+    });
 
     fetchItems();
   </script>

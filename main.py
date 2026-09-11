@@ -75,6 +75,14 @@ def update_item(item_id: int, item: ItemBase):
     save_to_json()
     return updated_item
 
+@app.get("/items/by_name", response_model = list[Item])
+def get_items_by_name(name: str):
+    result = []
+    for i in items_db.values():
+        if name in i.name:
+            result.append(i)
+    return result
+
 @app.get("/items/status", response_model=list[Item])
 def get_items_by_status(status: bool):
     return [item for item in items_db.values() if item.status == status]
