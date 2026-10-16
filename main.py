@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 import json
+import datetime
 
 app = FastAPI()
 
@@ -20,6 +21,7 @@ class ItemBase(BaseModel):
     name: str
     contents: str
     status: bool = False # Default value for status
+    dl : str =datetime.datetime.now().isoformat()  # Default value for dl
 
 
 class Item(ItemBase):
@@ -32,7 +34,7 @@ if Path("save.json").exists():
     with open("save.json", "r", encoding="utf-8") as f:
         loaded_data = json.load(f)
         for k, v in loaded_data.items():
-            item = Item(id=v["id"], name=v["name"], contents=v["contents"], status=v["status"])
+            item = Item(id=v['id'], name=v["name"], contents=v["contents"], status=v["status"], dl=v["dl"])
             items_db[int(k)] = item
     next_id = max(items_db.keys(), default=0) + 1
 else:
@@ -47,7 +49,7 @@ def save_to_json():
 def create_item(item: ItemBase):
     global next_id
 
-    new_item = Item(id=next_id, name=item.name, contents=item.contents, status=item.status)
+    new_item = Item(id=next_id, name=item.name, contents=item.contents, status=item.status, dl=item.dl)
     items_db[next_id] = new_item
     next_id += 1
     save_to_json()
@@ -58,7 +60,7 @@ def update_item_status(item_id: int):
     item = items_db.get(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    updated_item = Item(id=item_id, name=item.name, contents=item.contents, status=not item.status)
+    updated_item = Item(id=item_id, name=item.name, contents=item.contents, status=not item.status,dl=item.dl)
     items_db[item_id] = updated_item
     save_to_json()
     return updated_item
@@ -71,6 +73,16 @@ def update_item(item_id: int, item: ItemBase):
         raise HTTPException(status_code=404, detail="Item not found")
 
     updated_item = Item(id=item_id, name=item.name, contents=item.contents, status=item.status)
+    items_db[item_id] = updated_item
+    save_to_json()
+    return updated_item
+
+@app.put("/items/{item_id}/dl", response_model=Item)
+def update_item_dl(item_id: int, dl:str):
+    existing_item = items_db.get(item_id)
+    if existing_item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    updated_item = Item(id=item_id, name=existing_item.name, contents=existing_item.contents, status=existing_item.status, dl=dl)
     items_db[item_id] = updated_item
     save_to_json()
     return updated_item
@@ -91,6 +103,13 @@ def get_items_by_contents(contents: str):
             result.append(i)
     return result
 
+@app.get("/items/{item_id}/dl")
+def get_items_dl(item_id: int):
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    return [item for item in items_db.values() if item.id == item_id]
+
 @app.get("/items/status", response_model=list[Item])
 def get_items_by_status(status: bool):
     return [item for item in items_db.values() if item.status == status]
@@ -109,7 +128,6 @@ def get_item(item_id: int):
 
 @app.get("/items", response_model=list[Item])
 def list_items():
-
     return list(items_db.values()   )
 
 @app.delete("/items/{item_id}")
